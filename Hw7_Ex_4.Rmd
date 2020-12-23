@@ -1,0 +1,111 @@
+---
+title: "Hw7_Ex_4"
+author: "Manuel Alejandro Garcia Acosta"
+date: "10/30/2019"
+output: pdf_document
+---
+
+```{r}
+library(BioStatR)
+library(olsrr)
+```
+
+# Exercise 4 Homework 7
+
+## Read the data
+
+```{r}
+setwd('/home/noble_mannu/Documents/PhD/First/STAT_2131_Applied_Statistical_Methods_I/HW7')
+steam_data <- read.table('steam_text.txt', header = TRUE)
+```
+
+## Making the regression model
+
+```{r}
+m1 <- lm(steam ~ fat+glycerine+wind+frezday+temp, data = steam_data)
+```
+
+We display the summary of our model.
+
+```{r}
+summary(m1)
+```
+
+# Performing forward and backward model selection
+
+## Performing forward selection
+
+```{r}
+alpha.1 <- 0.1
+forward.1 <- ols_step_forward_p(m1, penter = alpha.1)
+forward.1$predictors   # Model only contains temp and fat
+# Our final model only has temp and fat as predictors
+```
+
+## Performing backward selection
+
+```{r}
+alpha.2 <- 0.2
+backward.1 <- ols_step_backward_p(m1, penter = alpha.2)
+backward.1$removed    # Model only contains temp and fat
+# Our final model only has temp and fat as predictors
+```
+
+Although we weren't required to do so, I performed forward step-wise selection just to see how it went.
+
+### Step-wise forward
+
+```{r}
+step.wise <- ols_step_both_p(m1, pent = alpha.1, prem = alpha.2)
+step.wise$predictors  # Model only contains temp and fat
+# Once again our final model only has temp and fat as predictors
+```
+
+Now we'll run best subset selection for this model
+
+# Running best subset selection
+
+```{r}
+Best.subset.steam <- olsrr::ols_step_best_subset(m1)
+```
+
+## Choosing the model based on AIC
+
+```{r}
+which.min(Best.subset.steam$aic)
+# Returns row 2, this corresponds to the model with only fat and temp as predictors
+# Prints the names of the predictors used in the best model with AIC criteria
+Best.subset.steam$predictors[which.min(Best.subset.steam$aic)]
+# This shows that the best model using AIC criteria is the one that has fat and temp as predictors
+```
+
+
+## Choosing the model based on BIC
+
+```{r}
+which.min(Best.subset.steam$sbc)
+# Returns row 2, this corresponds to the model with only fat and temp as predictors
+# Prints the names of the predictors used in the best model with BIC criteria
+Best.subset.steam$predictors[which.min(Best.subset.steam$sbc)]
+# This shows that the best model using BIC criteria is the one that has fat and temp as predictors
+```
+
+We conclude that backward, forward, step-wise forward and AIC and BIC methods all returned back the model with only 'fat' and 'temp' as predictors.
+
+### Note: With adjusted R2 criteria we get the same model as above
+
+```{r}
+which.max(Best.subset.steam$adjr)
+# Returns row 2, this corresponds to the model with only fat and temp as predictors
+# Prints the names of the predictors used in the best model with adjusted R2 criteria
+Best.subset.steam$predictors[which.max(Best.subset.steam$adjr)]
+```
+
+### Note: With R2 criteria we get the full model
+
+```{r}
+which.max(Best.subset.steam$rsquare)
+# Returns row 5, this corresponds to the full model
+# Prints the names of the predictors used in the best model with R2 criteria
+Best.subset.steam$predictors[which.max(Best.subset.steam$rsquare)]
+```

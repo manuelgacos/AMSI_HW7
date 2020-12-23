@@ -1,0 +1,135 @@
+---
+title: "Model Selection"
+author: "Chris McKennan"
+date: "10/24/2019"
+output: html_document
+---
+
+Here we will do model selection based on the Boston housing price data. Variables we will consider are:
+mvalue = median value of owner-occupied homes in \$1000. This is our Y.
+crim = per capita crime rate by town
+zn = proportion of residential land zoned for lots over 25,000 sq.ft
+indus = proportion of non-retail business acres per town
+chas = Charles River factor variable (= 1 if tract bounds river; 0 otherwise)
+nox = nitric oxide concentration (parts per 10 million)
+rooms = average number of rooms per dwelling
+age = proportion of owner-occupied units built prior to 1940
+distance = weighted distances to five Boston employment centers
+radial = index of accessibility to highways
+tax = full-value property-tax rate per \$10,000
+pt = pupil-teacher ratio by town
+
+
+#Load data
+```{r LoadData}
+Data <- data.frame(read.table(file = "/Users/Chris/Desktop/UniversityofPittsburgh/Teaching/STAT2131/Lectures/110217-ModelSelectionII/Boston.txt", header = T, sep = "\t", stringsAsFactors = F))
+Data <- Data[,!(colnames(Data)%in%c("LSTAT","b"))]
+```
+
+#Function to create histogram scatterplots
+```{r HistScatter}
+#install.packages("BioStatR")
+library(BioStatR)
+panel.hist <- function(x, ...)
+{
+    usr <- par("usr"); on.exit(par(usr))
+    par(usr = c(usr[1:2], 0, 1.5) )
+    h <- hist(x, plot = FALSE)
+    breaks <- h$breaks; nB <- length(breaks)
+    y <- h$counts; y <- y/max(y)
+    rect(breaks[-nB], 0, breaks[-1], y, col = "cyan", ...)
+}
+```
+
+#Explore the data
+```{r ExploreData}
+head(Data)
+pairs(~mvalue + indus + chas + nox + rooms + age + distance + radial + tax + pt, data=Data,
+   main="Scatterplot Matrix")
+
+pairs(~mvalue + crim + nox + rooms + distance + tax + pt, data=Data,
+   main="Scatterplot Matrix", diag.panel = panel.hist)
+```
+
+#Full model
+```{r FullModel}
+full.fit <- lm(mvalue ~ ., data=Data)
+
+summary(full.fit)
+plot(predict(full.fit), residuals(full.fit))
+qqnorm(residuals(full.fit)); qqline(residuals(full.fit), col="red")
+```
+
+#Best subset variable selection
+Look at ALL 2^11 = 2,048 possible models and choose the best one.
+```{r BestSubset}
+#install.packages("olsrr")
+
+Best.subset <- olsrr::ols_step_best_subset(full.fit)   #Run best subset selection. This may take a minute or two...
+```
+
+##R2 and adjusted R2
+Choose the model based on R2 or adjusted R2
+```{r R2andAdjustedR2}
+which.max(Best.subset$rsquare)
+which.max(Best.subset$adjr)
+
+predictors.include <- strsplit(Best.subset$predictors[which.max(Best.subset$adjr)], "[ ]+", perl=T)[[1]]
+colnames(Data)[!(colnames(Data)%in%predictors.include)]  #Which is left out?
+```
+Based on adjusted R2, we include all predictors EXCEPT for indus = proportion of non-retail business acres per town
+
+##AIC
+```{r AIC}
+which.min(Best.subset$aic)
+```
+If we know that the best AIC-determined model has 10 predictors, why do we know it is the same as above?
+
+##BIC
+Called SBC in output of olsrr::ols_step_best_subset
+```{r BIC}
+#Let's calculate BIC from AIC#
+AIC <- Best.subset$aic
+our.BIC <- AIC - 2*(1:11) + log(nrow(Data))*(1:11)
+
+#How does this compare to their BIC#
+Best.subset$sbc - our.BIC   #We differ by a constant. Why does this not matter?
+
+which.min(our.BIC)
+```
+
+#Forward model selection
+
+```{r ForwardModelSelection}
+alpha.1 <- 0.2
+forward.1 <- ols_step_forward_p(full.fit, penter = alpha.1)
+forward.1$predictors   #Contains all 11 predictors
+p.values.fullmodel <- summary(full.fit)$coefficients[,4]   #Why does model contain all 11 predictors when indus p-value from the full model fit is > alpha.1?
+
+#Fit model when indus enters#
+indus.enter <- lm(mvalue~ rooms + pt + nox + distance + crim + chas + age + zn + indus, data=Data)
+summary(indus.enter)
+
+#What if we change alpha.1?
+alpha.1 <- 0.01   #Harder for covariate to enter model
+forward.2 <- ols_step_forward_p(full.fit, penter = alpha.1)
+forward.2$predictors
+```
+
+#Backwards model selection
+
+```{r BackwardsModelSelection}
+alpha.2 <- 0.2
+backward.1 <- ols_step_backward_p(full.fit, penter = alpha.2)
+backward.1$removed    #Model contains all covariates, except for indus.
+```
+
+#Forward step-wise selection
+
+```{r ForwardStepWiseSelection}
+alpha.1 <- 0.1
+alpha.2 <- 0.3
+step.wise <- ols_step_both_p(full.fit, pent = alpha.1, prem = alpha.2)
+
+step.wise$predictors  #No indus, exactly as we would expect
+```
